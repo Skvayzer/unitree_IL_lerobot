@@ -193,6 +193,30 @@ python src/lerobot/scripts/train.py \
     --policy.type=pi0
 ```
 
+<!-- IsaacGr00t START -->
+- `Train Isaac Gr00t Policy (G1 default preset)`
+
+```bash
+cd unitree_lerobot/lerobot
+
+python src/lerobot/scripts/train.py \
+    --dataset.repo_id=unitreerobotics/G1_Dex3_ObjectPlacement_Dataset \
+    --dataset.video_backend=pyav \
+    --batch_size=32 \
+    --policy.type=isaac_gr00t \
+    --policy.base_model_path=nvidia/GR00T-N1.5-3B \
+    --policy.data_config=unitree_g1 \
+    --policy.embodiment_tag=new_embodiment \
+    --policy.push_to_hub=false \
+    --wandb.enable=true \
+    --wandb.project=G1_object_placement \
+    --wandb.entity=skvayzer \
+    --wandb.notes="unitree G1 object placement gr00t"
+```
+
+> Install GR00T before training (`pip install -e ../Isaac-GR00T`) and override `--policy.camera_key` or `--policy.state_groups='{...}'` if your dataset uses different feature names.
+<!-- IsaacGr00t END -->
+
 # 4. 🤖 Real-World Testing
 
 To test your trained model on a real robot, you can use the eval_g1.py script located in the eval_robot folder. Here’s how to run it:

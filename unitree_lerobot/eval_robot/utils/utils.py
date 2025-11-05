@@ -143,6 +143,9 @@ class EvalRealConfig:
     send_real_robot: bool = False
     use_dataset: bool = False
 
+    # Language / task override
+    task_override: str | None = None
+
     def __post_init__(self):
         # HACK: We parse again the cli args here to get the pretrained path if there was one.
         policy_path = parser.get_path_arg("policy")

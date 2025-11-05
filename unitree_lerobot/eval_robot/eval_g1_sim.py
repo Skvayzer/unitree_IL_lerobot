@@ -112,6 +112,11 @@ def eval_policy(
         from_idx = int(episode_metadata["dataset_from_index"])
         step = dataset[from_idx]
         init_arm_pose = step["observation.state"][:arm_dof].cpu().numpy()
+        task_instruction = cfg.task_override if cfg.task_override is not None else step.get("task", "")
+        if cfg.task_override is not None:
+            logger_mp.info(f"Using CLI-provided task instruction: {cfg.task_override}")
+        else:
+            logger_mp.info(f"Using dataset task instruction: {task_instruction}")
 
         user_input = input("Enter 's' to initialize the robot and start the evaluation: ")
         idx = 0
@@ -158,7 +163,7 @@ def eval_policy(
                     policy,
                     get_safe_torch_device(policy.config.device),
                     policy.config.use_amp,
-                    step["task"],
+                    task_instruction,
                     use_dataset=cfg.use_dataset,
                     preprocessor=preprocessor,
                     postprocessor=postprocessor,

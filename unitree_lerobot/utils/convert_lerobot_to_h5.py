@@ -26,8 +26,9 @@ class LeRobotDataProcessor:
 
     def process_episode(self, episode_index: int) -> dict:
         """Process a single episode to extract camera images, state, and action."""
-        from_idx = self.dataset.episode_data_index["from"][episode_index].item()
-        to_idx = self.dataset.episode_data_index["to"][episode_index].item()
+        episode_metadata = self.dataset.meta.episodes[int(episode_index)]
+        from_idx = int(episode_metadata["dataset_from_index"])
+        to_idx = int(episode_metadata["dataset_to_index"])
 
         episode = defaultdict(list)
         cameras = defaultdict(list)

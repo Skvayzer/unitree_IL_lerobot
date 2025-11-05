@@ -59,7 +59,9 @@ def replay_main(cfg: EvalRealConfig):
     actions = dataset.hf_dataset.select_columns("action")
 
     # init pose
-    from_idx = dataset.episode_data_index["from"][0].item()
+    first_episode_idx = dataset.episodes[0] if dataset.episodes else 0
+    episode_metadata = dataset.meta.episodes[int(first_episode_idx)]
+    from_idx = int(episode_metadata["dataset_from_index"])
     step = dataset[from_idx]
     init_left_arm_pose = step["observation.state"][:14].cpu().numpy()
 

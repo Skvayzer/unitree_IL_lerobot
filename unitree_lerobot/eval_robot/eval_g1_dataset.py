@@ -14,7 +14,7 @@ from pprint import pformat
 from dataclasses import asdict
 from torch import nn
 from contextlib import nullcontext
-from lerobot.policies.factory import make_policy
+from lerobot.policies.factory import make_policy, make_pre_post_processors
 from lerobot.utils.utils import (
     get_safe_torch_device,
     init_logging,
@@ -44,6 +44,8 @@ def eval_policy(
     cfg: EvalRealConfig,
     policy: torch.nn.Module,
     dataset: LeRobotDataset,
+    preprocessor,
+    postprocessor,
 ):
     assert isinstance(policy, nn.Module), "Policy must be a PyTorch nn module."
 
@@ -55,9 +57,11 @@ def eval_policy(
     policy.reset()  # Set policy to evaluation mode
 
     # init pose
-    from_idx = dataset.episode_data_index["from"][0].item()
+    first_episode_idx = dataset.episodes[0] if dataset.episodes else 0
+    episode_metadata = dataset.meta.episodes[int(first_episode_idx)]
+    from_idx = int(episode_metadata["dataset_from_index"])
     step = dataset[from_idx]
-    to_idx = dataset.episode_data_index["to"][0].item()
+    to_idx = int(episode_metadata["dataset_to_index"])
 
     ground_truth_actions = []
     predicted_actions = []
@@ -93,6 +97,8 @@ def eval_policy(
                 policy.config.use_amp,
                 step["task"],
                 use_dataset=True,
+                preprocessor=preprocessor,
+                postprocessor=postprocessor,
             )
             action_np = action.cpu().numpy()
 
@@ -169,10 +175,11 @@ def eval_main(cfg: EvalRealConfig):
     dataset = LeRobotDataset(repo_id=cfg.repo_id)
 
     policy = make_policy(cfg=cfg.policy, ds_meta=dataset.meta)
+    preprocessor, postprocessor = make_pre_post_processors(cfg.policy, dataset_stats=dataset.meta.stats)
     policy.eval()
 
     with torch.no_grad(), torch.autocast(device_type=device.type) if cfg.policy.use_amp else nullcontext():
-        eval_policy(cfg, policy, dataset)
+        eval_policy(cfg, policy, dataset, preprocessor, postprocessor)
 
     logging.info("End of eval")
 

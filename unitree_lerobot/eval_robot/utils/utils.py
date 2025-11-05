@@ -32,40 +32,59 @@ def extract_observation(step: dict):
 
 
 def predict_action(
-    observation: dict[str, np.ndarray],
+    observation: dict[str, torch.Tensor],
     policy: PreTrainedPolicy,
     device: torch.device,
     use_amp: bool,
     task: str | None = None,
     use_dataset: bool | None = False,
-):
-    observation = copy(observation)
+    preprocessor: Any | None = None,
+    postprocessor: Any | None = None,
+) -> torch.Tensor:
+    """Generate an action from the current observation using the provided policy."""
+    observation_copy = copy({k: v for k, v in observation.items() if v is not None})
+    task_str = task if task is not None else ""
+
     with (
         torch.inference_mode(),
         torch.autocast(device_type=device.type) if device.type == "cuda" and use_amp else nullcontext(),
     ):
-        # Convert to pytorch format: channel first and float32 in [0,1] with batch dimension
-        for name in observation:
-            if not use_dataset:
-                # Skip non-tensor observations (like task strings)
-                if not hasattr(observation[name], "unsqueeze"):
+        if preprocessor is not None:
+            processed_input = {}
+            for name, value in observation_copy.items():
+                tensor = torch.from_numpy(value) if isinstance(value, np.ndarray) else value
+                if isinstance(tensor, torch.Tensor) and "images" in name:
+                    if tensor.dtype != torch.float32:
+                        tensor = tensor.to(dtype=torch.float32)
+                    if not use_dataset:
+                        tensor = tensor / 255.0
+                    if tensor.ndim == 3 and tensor.shape[0] not in (1, 3, 4) and tensor.shape[-1] in (1, 3, 4):
+                        tensor = tensor.permute(2, 0, 1).contiguous()
+                processed_input[name] = tensor
+            # The processor expects complementary task information alongside observations.
+            processed_input["task"] = task_str
+            policy_input = preprocessor(processed_input)
+        else:
+            policy_input = observation_copy
+            for name in list(policy_input.keys()):
+                tensor = policy_input[name]
+                if isinstance(tensor, np.ndarray):
+                    tensor = torch.from_numpy(tensor)
+                if not hasattr(tensor, "unsqueeze"):
                     continue
                 if "images" in name:
-                    observation[name] = observation[name].type(torch.float32) / 255
-                    observation[name] = observation[name].permute(2, 0, 1).contiguous()
+                    if not use_dataset:
+                        tensor = tensor.type(torch.float32) / 255
+                        tensor = tensor.permute(2, 0, 1).contiguous()
+                policy_input[name] = tensor.unsqueeze(0).to(device)
+            policy_input["task"] = [task_str]
 
-            observation[name] = observation[name].unsqueeze(0).to(device)
+        action = policy.select_action(policy_input)
 
-        observation["task"] = [task if task else ""]
+        if postprocessor is not None:
+            action = postprocessor(action)
 
-        # Compute the next action with the policy
-        # based on the current observation
-        action = policy.select_action(observation)
-
-        # Remove batch dimension
         action = action.squeeze(0)
-
-        # Move to cpu, if not already the case
         action = action.to("cpu")
 
     return action

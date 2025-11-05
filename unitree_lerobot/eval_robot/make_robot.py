@@ -248,12 +248,15 @@ def process_images_and_observations(
     if has_wrist_cam and current_wrist_image is not None:
         left_wrist_cam = current_wrist_image[:, : wrist_img_shape[1] // 2]
         right_wrist_cam = current_wrist_image[:, wrist_img_shape[1] // 2 :]
-    observation = {
-        "observation.images.cam_left_high": torch.from_numpy(left_top_cam),
-        "observation.images.cam_right_high": torch.from_numpy(right_top_cam) if is_binocular else None,
-        "observation.images.cam_left_wrist": torch.from_numpy(left_wrist_cam) if has_wrist_cam else None,
-        "observation.images.cam_right_wrist": torch.from_numpy(right_wrist_cam) if has_wrist_cam else None,
+    observation: dict[str, torch.Tensor] = {
+        "observation.images.cam_left_high": torch.from_numpy(left_top_cam)
     }
+    if is_binocular and right_top_cam is not None:
+        observation["observation.images.cam_right_high"] = torch.from_numpy(right_top_cam)
+    if has_wrist_cam and left_wrist_cam is not None:
+        observation["observation.images.cam_left_wrist"] = torch.from_numpy(left_wrist_cam)
+    if has_wrist_cam and right_wrist_cam is not None:
+        observation["observation.images.cam_right_wrist"] = torch.from_numpy(right_wrist_cam)
     current_arm_q = arm_ctrl.get_current_dual_arm_q()
 
     return observation, current_arm_q

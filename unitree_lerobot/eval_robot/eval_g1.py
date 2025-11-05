@@ -14,7 +14,7 @@ from dataclasses import asdict
 from torch import nn
 from contextlib import nullcontext
 
-from lerobot.policies.factory import make_policy
+from lerobot.policies.factory import make_policy, make_pre_post_processors
 from lerobot.utils.utils import (
     get_safe_torch_device,
     init_logging,
@@ -47,6 +47,8 @@ def eval_policy(
     cfg: EvalRealConfig,
     policy: torch.nn.Module,
     dataset: LeRobotDataset,
+    preprocessor,
+    postprocessor,
 ):
     assert isinstance(policy, nn.Module), "Policy must be a PyTorch nn module."
 
@@ -79,8 +81,10 @@ def eval_policy(
             ]
         )
 
-        # Get initial pose from the first step of the dataset
-        from_idx = dataset.episode_data_index["from"][0].item()
+        # Get initial pose from the first step of the selected episode
+        first_episode_idx = dataset.episodes[0] if dataset.episodes else 0
+        episode_metadata = dataset.meta.episodes[int(first_episode_idx)]
+        from_idx = int(episode_metadata["dataset_from_index"])
         step = dataset[from_idx]
         init_arm_pose = step["observation.state"][:arm_dof].cpu().numpy()
 
@@ -120,6 +124,8 @@ def eval_policy(
                     policy.config.use_amp,
                     step["task"],
                     use_dataset=cfg.use_dataset,
+                    preprocessor=preprocessor,
+                    postprocessor=postprocessor,
                 )
                 action_np = action.cpu().numpy()
                 # 3. Execute Action
@@ -167,10 +173,17 @@ def eval_main(cfg: EvalRealConfig):
     dataset = LeRobotDataset(repo_id=cfg.repo_id)
 
     policy = make_policy(cfg=cfg.policy, ds_meta=dataset.meta)
+    preprocessor, postprocessor = make_pre_post_processors(cfg.policy, dataset_stats=dataset.meta.stats)
     policy.eval()
 
     with torch.no_grad(), torch.autocast(device_type=device.type) if cfg.policy.use_amp else nullcontext():
-        eval_policy(cfg=cfg, policy=policy, dataset=dataset)
+        eval_policy(
+            cfg=cfg,
+            policy=policy,
+            dataset=dataset,
+            preprocessor=preprocessor,
+            postprocessor=postprocessor,
+        )
 
     logging.info("End of eval")
 

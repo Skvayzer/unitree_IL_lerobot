@@ -136,7 +136,7 @@ class EvalRealConfig:
     arm: str = "G1_29"  # G1_29, G1_23
     ee: str = "dex3"  # dex3, dex1, inspire1, brainco
 
-    # Mode flags
+    # Mode  
     motion: bool = False
     headless: bool = False
     visualization: bool = False

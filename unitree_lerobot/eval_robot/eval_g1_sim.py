@@ -15,6 +15,7 @@ from torch import nn
 from contextlib import nullcontext
 
 from lerobot.policies.factory import make_policy, make_pre_post_processors
+from lerobot.processor.rename_processor import rename_stats
 from lerobot.utils.utils import (
     get_safe_torch_device,
     init_logging,
@@ -178,7 +179,8 @@ def eval_policy(
                     ee_action_start_idx = arm_dof
                     left_ee_action = action_np[ee_action_start_idx : ee_action_start_idx + ee_dof]
                     right_ee_action = action_np[ee_action_start_idx + ee_dof : ee_action_start_idx + 2 * ee_dof]
-                    # logger_mp.info(f"EE Action: left {left_ee_action}, right {right_ee_action}")
+                    # Closed gripper example: left_ee_action = np.array([1, 1, 1, -2, -2, -2, -2])                
+                    logger_mp.info(f"EE Action: left {left_ee_action}, right {right_ee_action}")
 
                     if isinstance(ee_shared_mem["left"], SynchronizedArray):
                         ee_shared_mem["left"][:] = to_list(left_ee_action)
@@ -234,10 +236,44 @@ def eval_main(cfg: EvalRealConfig):
 
     logging.info("Making policy.")
 
-    dataset = LeRobotDataset(repo_id=cfg.repo_id)
+    dataset_root = cfg.root if cfg.root else None
+    dataset = LeRobotDataset(repo_id=cfg.repo_id, root=dataset_root)
 
-    policy = make_policy(cfg=cfg.policy, ds_meta=dataset.meta)
-    preprocessor, postprocessor = make_pre_post_processors(cfg.policy, dataset_stats=dataset.meta.stats)
+    dataset_stats = dataset.meta.stats
+    if cfg.rename_map:
+        dataset_stats = rename_stats(dataset_stats, cfg.rename_map)
+
+    policy = make_policy(cfg=cfg.policy, ds_meta=dataset.meta, rename_map=cfg.rename_map)
+
+    processor_kwargs: dict = {"dataset_stats": dataset_stats}
+    postprocessor_kwargs: dict = {}
+
+    if cfg.policy.pretrained_path:
+        preprocessor_overrides = {
+            "device_processor": {"device": device.type},
+            "normalizer_processor": {
+                "stats": dataset_stats,
+                "features": {**policy.config.input_features, **policy.config.output_features},
+                "norm_map": policy.config.normalization_mapping,
+            },
+        }
+        if cfg.rename_map:
+            preprocessor_overrides["rename_observations_processor"] = {"rename_map": cfg.rename_map}
+        processor_kwargs["preprocessor_overrides"] = preprocessor_overrides
+        postprocessor_kwargs["postprocessor_overrides"] = {
+            "unnormalizer_processor": {
+                "stats": dataset_stats,
+                "features": policy.config.output_features,
+                "norm_map": policy.config.normalization_mapping,
+            }
+        }
+
+    preprocessor, postprocessor = make_pre_post_processors(
+        cfg.policy,
+        pretrained_path=cfg.policy.pretrained_path,
+        **processor_kwargs,
+        **postprocessor_kwargs,
+    )
     policy.eval()
 
     with torch.no_grad(), torch.autocast(device_type=device.type) if cfg.policy.use_amp else nullcontext():

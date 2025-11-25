@@ -68,6 +68,7 @@ EE_CONFIG: dict[str, dict[str, Any]] = {
 }
 
 
+
 def setup_image_client(args: argparse.Namespace) -> dict[str, Any]:
     """Initializes and starts the image client and shared memory."""
     # image client: img_config should be the same as the configuration in image_server.py (of Robot's development computing unit)
@@ -75,8 +76,8 @@ def setup_image_client(args: argparse.Namespace) -> dict[str, Any]:
         img_config = {
             "fps": 30,
             "head_camera_type": "opencv",
-            "head_camera_image_shape": [480, 640],  # Head camera resolution
-            "head_camera_id_numbers": [0],
+            "head_camera_image_shape": [480, 1280],  # Head camera resolution (stereo)
+            "head_camera_id_numbers": [0, 1],
             "wrist_camera_type": "opencv",
             "wrist_camera_image_shape": [480, 640],  # Wrist camera resolution
             "wrist_camera_id_numbers": [2, 4],
@@ -257,6 +258,14 @@ def process_images_and_observations(
         observation["observation.images.cam_left_wrist"] = torch.from_numpy(left_wrist_cam)
     if has_wrist_cam and right_wrist_cam is not None:
         observation["observation.images.cam_right_wrist"] = torch.from_numpy(right_wrist_cam)
+
+    # Some simulation setups only provide a single head camera stream. When the
+    # policy expects both cam_left_high/cam_right_high, fall back to duplicating
+    # the available feed so feature names remain consistent with training.
+    if "observation.images.cam_right_high" not in observation:
+        observation["observation.images.cam_right_high"] = observation[
+            "observation.images.cam_left_high"
+        ].clone()
     current_arm_q = arm_ctrl.get_current_dual_arm_q()
 
     return observation, current_arm_q

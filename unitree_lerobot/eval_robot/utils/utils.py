@@ -4,7 +4,7 @@ from typing import Any
 from contextlib import nullcontext
 from copy import copy
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from lerobot.configs import parser
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.policies.pretrained import PreTrainedPolicy
@@ -145,6 +145,8 @@ class EvalRealConfig:
 
     # Language / task override
     task_override: str | None = None
+    # Optional observation renaming to align dataset cameras with policy names
+    rename_map: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self):
         # HACK: We parse again the cli args here to get the pretrained path if there was one.

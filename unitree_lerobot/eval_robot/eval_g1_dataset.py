@@ -137,6 +137,43 @@ def eval_policy(
         # Get the number of timesteps and action dimensions
         n_timesteps, n_dims = ground_truth_actions.shape
 
+        joint_names = [
+            # Left arm (7)
+            "left_shoulder_pitch",
+            "left_shoulder_roll",
+            "left_shoulder_yaw",
+            "left_elbow",
+            "left_wrist_roll",
+            "left_wrist_pitch",
+            "left_wrist_yaw",
+            # Right arm (7)
+            "right_shoulder_pitch",
+            "right_shoulder_roll",
+            "right_shoulder_yaw",
+            "right_elbow",
+            "right_wrist_roll",
+            "right_wrist_pitch",
+            "right_wrist_yaw",
+            # Left Dex3 hand (7)
+            "left_thumb_0",
+            "left_thumb_1",
+            "left_thumb_2",
+            "left_middle_0",
+            "left_middle_1",
+            "left_index_0",
+            "left_index_1",
+            # Right Dex3 hand (7)
+            "right_thumb_0",
+            "right_thumb_1",
+            "right_thumb_2",
+            "right_index_0",
+            "right_index_1",
+            "right_middle_0",
+            "right_middle_1",
+        ]
+        if len(joint_names) != n_dims:
+            joint_names = [f"Dim {i + 1}" for i in range(n_dims)]
+
         # Create a figure with subplots for each action dimension
         fig, axes = plt.subplots(n_dims, 1, figsize=(12, 4 * n_dims), sharex=True)
         fig.suptitle("Ground Truth vs Predicted Actions")
@@ -147,7 +184,7 @@ def eval_policy(
 
             ax.plot(ground_truth_actions[:, i], label="Ground Truth", color="blue")
             ax.plot(predicted_actions[:, i], label="Predicted", color="red", linestyle="--")
-            ax.set_ylabel(f"Dim {i + 1}")
+            ax.set_ylabel(joint_names[i])
             ax.legend()
 
         # Set common x-label

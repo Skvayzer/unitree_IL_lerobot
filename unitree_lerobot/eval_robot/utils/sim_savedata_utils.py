@@ -8,7 +8,7 @@ from unitree_lerobot.eval_robot.utils.utils import (
 from unitree_lerobot.eval_robot.make_robot import (
     publish_reset_category,
 )
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from lerobot.configs import parser
 from lerobot.configs.policies import PreTrainedConfig
 import time
@@ -193,6 +193,8 @@ class EvalRealConfig:
 
     # Optional language/task override supplied via CLI
     task_override: str | None = None
+    # Optional observation renaming to align dataset cameras with policy names
+    rename_map: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self):
         # HACK: We parse again the cli args here to get the pretrained path if there was one.

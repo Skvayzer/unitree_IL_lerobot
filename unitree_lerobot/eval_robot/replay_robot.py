@@ -19,6 +19,7 @@ from unitree_lerobot.eval_robot.utils.utils import cleanup_resources, EvalRealCo
 
 from unitree_lerobot.eval_robot.utils.rerun_visualizer import RerunLogger, visualization_data
 from unitree_lerobot.eval_robot.utils.utils import to_list, to_scalar
+from unitree_lerobot.eval_robot.utils.dex3_order import reorder_dex3_right_legacy_sim
 
 import logging_mp
 
@@ -67,6 +68,14 @@ def replay_main(cfg: EvalRealConfig):
 
     user_input = input("Please enter the start signal (enter 's' to start the subsequent program):")
     if user_input.lower() == "s":
+        dex3_legacy_order_shim = bool(cfg.ee and cfg.ee.lower() == "dex3" and cfg.dex3_right_order_legacy_sim)
+        if dex3_legacy_order_shim:
+            logger_mp.warning(
+                "Dex3 legacy sim right-hand order shim is ENABLED. "
+                "Applying reorder on right-hand state/action."
+            )
+        else:
+            logger_mp.info("Dex3 legacy sim right-hand order shim is disabled.")
         # "The initial positions of the robot's arm and fingers take the initial positions during data recording."
         logger_mp.info("Initializing robot to starting pose...")
         tau = arm_ik.solve_tau(init_left_arm_pose)
@@ -88,12 +97,20 @@ def replay_main(cfg: EvalRealConfig):
                 ee_action_start_idx = arm_dof
                 left_ee_action = action_np[ee_action_start_idx : ee_action_start_idx + ee_dof]
                 right_ee_action = action_np[ee_action_start_idx + ee_dof : ee_action_start_idx + 2 * ee_dof]
+                if dex3_legacy_order_shim:
+                    right_ee_action = reorder_dex3_right_legacy_sim(
+                        right_ee_action, context="replay/right_ee_action"
+                    )
                 logger_mp.info(f"EE Action: left {left_ee_action}, right {right_ee_action}")
 
                 with ee_shared_mem["lock"]:
                     full_state = np.array(ee_shared_mem["state"][:])
                     left_ee_state = full_state[:ee_dof]
                     right_ee_state = full_state[ee_dof:]
+                if dex3_legacy_order_shim:
+                    right_ee_state = reorder_dex3_right_legacy_sim(
+                        right_ee_state, context="replay/right_ee_state"
+                    )
 
                 if isinstance(ee_shared_mem["left"], SynchronizedArray):
                     ee_shared_mem["left"][:] = to_list(left_ee_action)

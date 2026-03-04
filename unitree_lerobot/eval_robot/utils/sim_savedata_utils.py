@@ -195,6 +195,16 @@ class EvalRealConfig:
     task_override: str | None = None
     # Optional observation renaming to align dataset cameras with policy names
     rename_map: dict[str, str] = field(default_factory=dict)
+    # Keep this enabled when simulation still uses legacy Dex3 right-hand order
+    # (thumb,thumb,thumb,middle,middle,index,index) instead of policy order
+    # (thumb,thumb,thumb,index,index,middle,middle).
+    dex3_right_order_legacy_sim: bool = True
+    # Diagnostics for cross-PC runs
+    enable_io_latency_diag: bool = False
+    io_latency_diag_every_n_steps: int = 50
+    # Enable ImageClient transport diagnostics. If sender doesn't include timestamp
+    # header, FPS/age are still reported and latency is marked unavailable.
+    enable_image_transport_diag: bool = False
 
     def __post_init__(self):
         # HACK: We parse again the cli args here to get the pretrained path if there was one.

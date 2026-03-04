@@ -1,7 +1,8 @@
 # for dex3-1
-from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize  # dds
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber  # dds
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandCmd_, HandState_  # idl
 from unitree_sdk2py.idl.default import unitree_hg_msg_dds__HandCmd_
+from unitree_lerobot.eval_robot.utils.dds_utils import init_dds_channel
 
 # for gripper
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import MotorCmds_, MotorStates_  # idl
@@ -55,11 +56,9 @@ class Dex3_1_Controller:
         self.fps = fps
         self.Unit_Test = Unit_Test
         self.simulation_mode = simulation_mode
+        self._last_state_update_time = 0.0
 
-        if self.simulation_mode:
-            ChannelFactoryInitialize(1)
-        else:
-            ChannelFactoryInitialize(0)
+        init_dds_channel(self.simulation_mode)
 
         # initialize handcmd publisher and handstate subscriber
         self.LeftHandCmb_publisher = ChannelPublisher(kTopicDex3LeftCommand, HandCmd_)
@@ -116,7 +115,13 @@ class Dex3_1_Controller:
                 # Update right hand state
                 for idx, id in enumerate(Dex3_1_Right_JointIndex):
                     self.right_hand_state_array[idx] = right_hand_msg.motor_state[id].q
+                self._last_state_update_time = time.time()
             time.sleep(0.002)
+
+    def get_state_age_ms(self):
+        if self._last_state_update_time <= 0:
+            return float("inf")
+        return (time.time() - self._last_state_update_time) * 1000.0
 
     class _RIS_Mode:
         def __init__(self, id=0, status=0x01, timeout=0):
@@ -274,10 +279,7 @@ class Dex1_1_Gripper_Controller:
         self.gripper_sub_ready = False
         self.simulation_mode = simulation_mode
 
-        if self.simulation_mode:
-            ChannelFactoryInitialize(1)
-        else:
-            ChannelFactoryInitialize(0)
+        init_dds_channel(self.simulation_mode)
 
         # initialize handcmd publisher and handstate subscriber
         self.LeftGripperCmb_publisher = ChannelPublisher(kTopicGripperLeftCommand, MotorCmds_)

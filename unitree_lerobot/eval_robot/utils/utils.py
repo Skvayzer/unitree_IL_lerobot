@@ -147,6 +147,13 @@ class EvalRealConfig:
     task_override: str | None = None
     # Optional observation renaming to align dataset cameras with policy names
     rename_map: dict[str, str] = field(default_factory=dict)
+    # Optional compatibility shim for simulations using legacy Dex3 right-hand
+    # order. Keep disabled by default for non-sim / real-robot runs.
+    dex3_right_order_legacy_sim: bool = False
+    # Diagnostics for cross-PC runs
+    enable_io_latency_diag: bool = False
+    io_latency_diag_every_n_steps: int = 50
+    enable_image_transport_diag: bool = False
 
     def __post_init__(self):
         # HACK: We parse again the cli args here to get the pretrained path if there was one.

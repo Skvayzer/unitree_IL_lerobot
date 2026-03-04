@@ -3,10 +3,11 @@ import threading
 import time
 from enum import IntEnum
 
-from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize  # dds
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber  # dds
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_ as hg_LowCmd, LowState_ as hg_LowState  # idl for g1, h1_2
 from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
 from unitree_sdk2py.utils.crc import CRC
+from unitree_lerobot.eval_robot.utils.dds_utils import init_dds_channel
 
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import LowCmd_ as go_LowCmd, LowState_ as go_LowState  # idl for h1
 from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowCmd_
@@ -86,12 +87,10 @@ class G1_29_ArmController:
         self._speed_gradual_max = False
         self._gradual_start_time = None
         self._gradual_time = None
+        self._last_lowstate_time = 0.0
 
         # initialize lowcmd publisher and lowstate subscriber
-        if self.simulation_mode:
-            ChannelFactoryInitialize(1)
-        else:
-            ChannelFactoryInitialize(0)
+        init_dds_channel(self.simulation_mode)
 
         if self.motion_mode:
             self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Motion, hg_LowCmd)
@@ -160,6 +159,7 @@ class G1_29_ArmController:
                     lowstate.motor_state[id].q = msg.motor_state[id].q
                     lowstate.motor_state[id].dq = msg.motor_state[id].dq
                 self.lowstate_buffer.SetData(lowstate)
+                self._last_lowstate_time = time.time()
             time.sleep(0.002)
 
     def clip_arm_q_target(self, target_q, velocity_limit):
@@ -225,6 +225,11 @@ class G1_29_ArmController:
     def get_current_dual_arm_dq(self):
         """Return current state dq of the left and right arm motors."""
         return np.array([self.lowstate_buffer.GetData().motor_state[id].dq for id in G1_29_JointArmIndex])
+
+    def get_lowstate_age_ms(self):
+        if self._last_lowstate_time <= 0:
+            return float("inf")
+        return (time.time() - self._last_lowstate_time) * 1000.0
 
     def ctrl_dual_arm_go_home(self):
         """Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero."""
@@ -377,12 +382,10 @@ class G1_23_ArmController:
         self._speed_gradual_max = False
         self._gradual_start_time = None
         self._gradual_time = None
+        self._last_lowstate_time = 0.0
 
         # initialize lowcmd publisher and lowstate subscriber
-        if self.simulation_mode:
-            ChannelFactoryInitialize(1)
-        else:
-            ChannelFactoryInitialize(0)
+        init_dds_channel(self.simulation_mode)
 
         if self.motion_mode:
             self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Motion, hg_LowCmd)
@@ -451,6 +454,7 @@ class G1_23_ArmController:
                     lowstate.motor_state[id].q = msg.motor_state[id].q
                     lowstate.motor_state[id].dq = msg.motor_state[id].dq
                 self.lowstate_buffer.SetData(lowstate)
+                self._last_lowstate_time = time.time()
             time.sleep(0.002)
 
     def clip_arm_q_target(self, target_q, velocity_limit):
@@ -516,6 +520,11 @@ class G1_23_ArmController:
     def get_current_dual_arm_dq(self):
         """Return current state dq of the left and right arm motors."""
         return np.array([self.lowstate_buffer.GetData().motor_state[id].dq for id in G1_23_JointArmIndex])
+
+    def get_lowstate_age_ms(self):
+        if self._last_lowstate_time <= 0:
+            return float("inf")
+        return (time.time() - self._last_lowstate_time) * 1000.0
 
     def ctrl_dual_arm_go_home(self):
         """Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero."""
@@ -661,10 +670,7 @@ class H1_2_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        if self.simulation_mode:
-            ChannelFactoryInitialize(1)
-        else:
-            ChannelFactoryInitialize(0)
+        init_dds_channel(self.simulation_mode)
         self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, hg_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, hg_LowState)
@@ -937,10 +943,7 @@ class H1_ArmController:
         self._gradual_time = None
 
         # initialize lowcmd publisher and lowstate subscriber
-        if self.simulation_mode:
-            ChannelFactoryInitialize(1)
-        else:
-            ChannelFactoryInitialize(0)
+        init_dds_channel(self.simulation_mode)
         self.lowcmd_publisher = ChannelPublisher(kTopicLowCommand_Debug, go_LowCmd)
         self.lowcmd_publisher.Init()
         self.lowstate_subscriber = ChannelSubscriber(kTopicLowState, go_LowState)

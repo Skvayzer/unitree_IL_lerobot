@@ -21,7 +21,7 @@ class RerunLogger:
         """Initializes the Rerun logger."""
         # Use a descriptive name for the Rerun recording
         rr.init(f"Dataset_Log_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
-        rr.spawn(memory_limit=memory_limit)
+        rr.serve_web(open_browser=False, web_port=9090, ws_port=9877, server_memory_limit=memory_limit)
 
         self.prefix = prefix
         self.blueprint_sent = False

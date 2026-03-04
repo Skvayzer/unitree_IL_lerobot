@@ -71,89 +71,116 @@ EE_CONFIG: dict[str, dict[str, Any]] = {
 
 def setup_image_client(args: argparse.Namespace) -> dict[str, Any]:
     """Initializes and starts the image client and shared memory."""
+    enable_image_transport_diag = bool(getattr(args, "enable_image_transport_diag", False))
+    created_shm: list[shared_memory.SharedMemory] = []
+    wrist_img_shape = None
+    wrist_img_array = None
+    wrist_img_shm = None
     # image client: img_config should be the same as the configuration in image_server.py (of Robot's development computing unit)
-    if getattr(args, "sim", False):
-        img_config = {
-            "fps": 30,
-            "head_camera_type": "opencv",
-            "head_camera_image_shape": [480, 1280],  # Head camera resolution (stereo)
-            "head_camera_id_numbers": [0, 1],
-            "wrist_camera_type": "opencv",
-            "wrist_camera_image_shape": [480, 640],  # Wrist camera resolution
-            "wrist_camera_id_numbers": [2, 4],
+    try:
+        if getattr(args, "sim", False):
+            img_config = {
+                "fps": 30,
+                "head_camera_type": "opencv",
+                "head_camera_image_shape": [480, 1280],  # Head camera resolution (stereo)
+                "head_camera_id_numbers": [0, 1],
+                "wrist_camera_type": "opencv",
+                "wrist_camera_image_shape": [480, 640],  # Wrist camera resolution
+                "wrist_camera_id_numbers": [2, 4],
+            }
+        else:
+            img_config = {
+                "fps": 30,
+                "head_camera_type": "opencv",
+                "head_camera_image_shape": [480, 1280],  # Head camera resolution
+                "head_camera_id_numbers": [0],
+                "wrist_camera_type": "opencv",
+                "wrist_camera_image_shape": [480, 640],  # Wrist camera resolution
+                "wrist_camera_id_numbers": [2, 4],
+            }
+
+        ASPECT_RATIO_THRESHOLD = 2.0  # If the aspect ratio exceeds this value, it is considered binocular
+        if len(img_config["head_camera_id_numbers"]) > 1 or (
+            img_config["head_camera_image_shape"][1] / img_config["head_camera_image_shape"][0] > ASPECT_RATIO_THRESHOLD
+        ):
+            BINOCULAR = True
+        else:
+            BINOCULAR = False
+        if "wrist_camera_type" in img_config:
+            WRIST = True
+        else:
+            WRIST = False
+
+        if BINOCULAR and not (
+            img_config["head_camera_image_shape"][1] / img_config["head_camera_image_shape"][0] > ASPECT_RATIO_THRESHOLD
+        ):
+            tv_img_shape = (img_config["head_camera_image_shape"][0], img_config["head_camera_image_shape"][1] * 2, 3)
+        else:
+            tv_img_shape = (img_config["head_camera_image_shape"][0], img_config["head_camera_image_shape"][1], 3)
+
+        tv_img_shm = shared_memory.SharedMemory(create=True, size=np.prod(tv_img_shape) * np.uint8().itemsize)
+        created_shm.append(tv_img_shm)
+        tv_img_array = np.ndarray(tv_img_shape, dtype=np.uint8, buffer=tv_img_shm.buf)
+
+        if WRIST and getattr(args, "sim", False):
+            wrist_img_shape = (img_config["wrist_camera_image_shape"][0], img_config["wrist_camera_image_shape"][1] * 2, 3)
+            wrist_img_shm = shared_memory.SharedMemory(create=True, size=np.prod(wrist_img_shape) * np.uint8().itemsize)
+            created_shm.append(wrist_img_shm)
+            wrist_img_array = np.ndarray(wrist_img_shape, dtype=np.uint8, buffer=wrist_img_shm.buf)
+            img_client = ImageClient(
+                tv_img_shape=tv_img_shape,
+                tv_img_shm_name=tv_img_shm.name,
+                wrist_img_shape=wrist_img_shape,
+                wrist_img_shm_name=wrist_img_shm.name,
+                server_address="127.0.0.1",
+                Unit_Test=enable_image_transport_diag,
+            )
+        elif WRIST and not getattr(args, "sim", False):
+            wrist_img_shape = (img_config["wrist_camera_image_shape"][0], img_config["wrist_camera_image_shape"][1] * 2, 3)
+            wrist_img_shm = shared_memory.SharedMemory(create=True, size=np.prod(wrist_img_shape) * np.uint8().itemsize)
+            created_shm.append(wrist_img_shm)
+            wrist_img_array = np.ndarray(wrist_img_shape, dtype=np.uint8, buffer=wrist_img_shm.buf)
+            img_client = ImageClient(
+                tv_img_shape=tv_img_shape,
+                tv_img_shm_name=tv_img_shm.name,
+                wrist_img_shape=wrist_img_shape,
+                wrist_img_shm_name=wrist_img_shm.name,
+                Unit_Test=enable_image_transport_diag,
+            )
+        else:
+            img_client = ImageClient(
+                tv_img_shape=tv_img_shape,
+                tv_img_shm_name=tv_img_shm.name,
+                Unit_Test=enable_image_transport_diag,
+            )
+
+        has_wrist_cam = "wrist_camera_type" in img_config
+
+        image_receive_thread = threading.Thread(target=img_client.receive_process, daemon=True)
+        image_receive_thread.daemon = True
+        image_receive_thread.start()
+
+        return {
+            "img_client": img_client,
+            "tv_img_array": tv_img_array,
+            "wrist_img_array": wrist_img_array,
+            "tv_img_shape": tv_img_shape,
+            "wrist_img_shape": wrist_img_shape,
+            "is_binocular": BINOCULAR,
+            "has_wrist_cam": has_wrist_cam,
+            "shm_resources": [tv_img_shm, wrist_img_shm],
         }
-    else:
-        img_config = {
-            "fps": 30,
-            "head_camera_type": "opencv",
-            "head_camera_image_shape": [480, 1280],  # Head camera resolution
-            "head_camera_id_numbers": [0],
-            "wrist_camera_type": "opencv",
-            "wrist_camera_image_shape": [480, 640],  # Wrist camera resolution
-            "wrist_camera_id_numbers": [2, 4],
-        }
-
-    ASPECT_RATIO_THRESHOLD = 2.0  # If the aspect ratio exceeds this value, it is considered binocular
-    if len(img_config["head_camera_id_numbers"]) > 1 or (
-        img_config["head_camera_image_shape"][1] / img_config["head_camera_image_shape"][0] > ASPECT_RATIO_THRESHOLD
-    ):
-        BINOCULAR = True
-    else:
-        BINOCULAR = False
-    if "wrist_camera_type" in img_config:
-        WRIST = True
-    else:
-        WRIST = False
-
-    if BINOCULAR and not (
-        img_config["head_camera_image_shape"][1] / img_config["head_camera_image_shape"][0] > ASPECT_RATIO_THRESHOLD
-    ):
-        tv_img_shape = (img_config["head_camera_image_shape"][0], img_config["head_camera_image_shape"][1] * 2, 3)
-    else:
-        tv_img_shape = (img_config["head_camera_image_shape"][0], img_config["head_camera_image_shape"][1], 3)
-
-    tv_img_shm = shared_memory.SharedMemory(create=True, size=np.prod(tv_img_shape) * np.uint8().itemsize)
-    tv_img_array = np.ndarray(tv_img_shape, dtype=np.uint8, buffer=tv_img_shm.buf)
-
-    if WRIST and getattr(args, "sim", False):
-        wrist_img_shape = (img_config["wrist_camera_image_shape"][0], img_config["wrist_camera_image_shape"][1] * 2, 3)
-        wrist_img_shm = shared_memory.SharedMemory(create=True, size=np.prod(wrist_img_shape) * np.uint8().itemsize)
-        wrist_img_array = np.ndarray(wrist_img_shape, dtype=np.uint8, buffer=wrist_img_shm.buf)
-        img_client = ImageClient(
-            tv_img_shape=tv_img_shape,
-            tv_img_shm_name=tv_img_shm.name,
-            wrist_img_shape=wrist_img_shape,
-            wrist_img_shm_name=wrist_img_shm.name,
-            server_address="127.0.0.1",
-        )
-    elif WRIST and not getattr(args, "sim", False):
-        wrist_img_shape = (img_config["wrist_camera_image_shape"][0], img_config["wrist_camera_image_shape"][1] * 2, 3)
-        wrist_img_shm = shared_memory.SharedMemory(create=True, size=np.prod(wrist_img_shape) * np.uint8().itemsize)
-        wrist_img_array = np.ndarray(wrist_img_shape, dtype=np.uint8, buffer=wrist_img_shm.buf)
-        img_client = ImageClient(
-            tv_img_shape=tv_img_shape,
-            tv_img_shm_name=tv_img_shm.name,
-            wrist_img_shape=wrist_img_shape,
-            wrist_img_shm_name=wrist_img_shm.name,
-        )
-    else:
-        img_client = ImageClient(tv_img_shape=tv_img_shape, tv_img_shm_name=tv_img_shm.name)
-
-    has_wrist_cam = "wrist_camera_type" in img_config
-
-    image_receive_thread = threading.Thread(target=img_client.receive_process, daemon=True)
-    image_receive_thread.daemon = True
-    image_receive_thread.start()
-
-    return {
-        "tv_img_array": tv_img_array,
-        "wrist_img_array": wrist_img_array,
-        "tv_img_shape": tv_img_shape,
-        "wrist_img_shape": wrist_img_shape,
-        "is_binocular": BINOCULAR,
-        "has_wrist_cam": has_wrist_cam,
-        "shm_resources": [tv_img_shm, wrist_img_shm],
-    }
+    except Exception:
+        for shm in created_shm:
+            try:
+                shm.close()
+            except Exception:
+                pass
+            try:
+                shm.unlink()
+            except Exception:
+                pass
+        raise
 
 
 def _resolve_out_len(spec: dict[str, Any]) -> int:

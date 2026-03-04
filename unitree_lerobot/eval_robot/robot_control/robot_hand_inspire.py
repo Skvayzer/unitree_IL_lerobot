@@ -1,6 +1,7 @@
-from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize  # dds
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber  # dds
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import MotorCmds_, MotorStates_  # idl
 from unitree_sdk2py.idl.default import unitree_go_msg_dds__MotorCmd_
+from unitree_lerobot.eval_robot.utils.dds_utils import init_dds_channel
 
 import numpy as np
 from enum import IntEnum
@@ -34,10 +35,7 @@ class Inspire_Controller:
         self.Unit_Test = Unit_Test
         self.simulation_mode = simulation_mode
 
-        if self.simulation_mode:
-            ChannelFactoryInitialize(1)
-        else:
-            ChannelFactoryInitialize(0)
+        init_dds_channel(self.simulation_mode)
 
         # initialize handcmd publisher and handstate subscriber
         self.HandCmb_publisher = ChannelPublisher(kTopicInspireCommand, MotorCmds_)

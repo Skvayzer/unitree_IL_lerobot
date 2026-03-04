@@ -32,6 +32,7 @@ from unitree_lerobot.eval_robot.utils.utils import (
 )
 from unitree_lerobot.eval_robot.make_robot import setup_robot_interface
 from unitree_lerobot.eval_robot.utils.rerun_visualizer import RerunLogger, visualization_data
+from unitree_lerobot.eval_robot.utils.dex3_order import reorder_dex3_right_legacy_sim
 
 
 import logging_mp
@@ -72,6 +73,14 @@ def eval_policy(
             robot_interface[key] for key in ["arm_ctrl", "arm_ik", "ee_shared_mem", "arm_dof", "ee_dof"]
         )
         init_arm_pose = step["observation.state"][:arm_dof].cpu().numpy()
+    dex3_legacy_order_shim = bool(cfg.ee and cfg.ee.lower() == "dex3" and cfg.dex3_right_order_legacy_sim)
+    if dex3_legacy_order_shim:
+        logger_mp.warning(
+            "Dex3 legacy sim right-hand order shim is ENABLED. "
+            "Applying reorder on right-hand actions before publish."
+        )
+    else:
+        logger_mp.info("Dex3 legacy sim right-hand order shim is disabled.")
 
     # ===============init robot=====================
     user_input = input("Please enter the start signal (enter 's' to start the subsequent program):")
@@ -116,6 +125,10 @@ def eval_policy(
                     ee_action_start_idx = arm_dof
                     left_ee_action = action_np[ee_action_start_idx : ee_action_start_idx + ee_dof]
                     right_ee_action = action_np[ee_action_start_idx + ee_dof : ee_action_start_idx + 2 * ee_dof]
+                    if dex3_legacy_order_shim:
+                        right_ee_action = reorder_dex3_right_legacy_sim(
+                            right_ee_action, context="eval_g1_dataset/right_ee_action"
+                        )
                     # logger_mp.info(f"EE Action: left {left_ee_action}, right {right_ee_action}")
 
                     if isinstance(ee_shared_mem["left"], SynchronizedArray):

@@ -13,17 +13,22 @@ from pprint import pformat
 from dataclasses import asdict
 from torch import nn
 from contextlib import nullcontext
+from typing import Any
 
 from lerobot.policies.factory import make_policy, make_pre_post_processors
-from lerobot.processor.rename_processor import rename_stats
 from lerobot.utils.utils import (
     get_safe_torch_device,
     init_logging,
 )
 from lerobot.configs import parser
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.policies.pretrained import PreTrainedPolicy
 from multiprocessing.sharedctypes import SynchronizedArray
-
+from lerobot.processor.rename_processor import rename_stats
+from lerobot.processor import (
+    PolicyAction,
+    PolicyProcessorPipeline,
+)
 from unitree_lerobot.eval_robot.make_robot import (
     setup_image_client,
     setup_robot_interface,
@@ -51,10 +56,10 @@ logger_mp = logging_mp.get_logger(__name__)
 
 def eval_policy(
     cfg: EvalRealConfig,
-    policy: torch.nn.Module,
     dataset: LeRobotDataset,
-    preprocessor,
-    postprocessor,
+    policy: PreTrainedPolicy | None = None,
+    preprocessor=None,
+    postprocessor=None,
 ):
     assert isinstance(policy, nn.Module), "Policy must be a PyTorch nn module."
 
@@ -63,7 +68,11 @@ def eval_policy(
     if cfg.visualization:
         rerun_logger = RerunLogger()
 
-    policy.reset()  # Set policy to evaluation mode
+    # Reset policy and processor if they are provided
+    if policy is not None and preprocessor is not None and postprocessor is not None:
+        policy.reset()
+        preprocessor.reset()
+        postprocessor.reset()
 
     image_info = None
     try:
@@ -211,6 +220,8 @@ def eval_policy(
                     observation,
                     policy,
                     get_safe_torch_device(policy.config.device),
+                    preprocessor,
+                    postprocessor,
                     policy.config.use_amp,
                     task_instruction,
                     use_dataset=cfg.use_dataset,
@@ -410,6 +421,16 @@ def eval_main(cfg: EvalRealConfig):
         **postprocessor_kwargs,
     )
     policy.eval()
+
+    preprocessor, postprocessor = make_pre_post_processors(
+        policy_cfg=cfg.policy,
+        pretrained_path=cfg.policy.pretrained_path,
+        dataset_stats=rename_stats(dataset.meta.stats, cfg.rename_map),
+        preprocessor_overrides={
+            "device_processor": {"device": cfg.policy.device},
+            "rename_observations_processor": {"rename_map": cfg.rename_map},
+        },
+    )
 
     with torch.no_grad(), torch.autocast(device_type=device.type) if cfg.policy.use_amp else nullcontext():
         eval_policy(

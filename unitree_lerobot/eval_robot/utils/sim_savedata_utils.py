@@ -190,6 +190,7 @@ class EvalRealConfig:
     save_data: bool = False
     task_dir: str = "./data"
     max_episodes: int = 1200
+    rename_map: dict[str, str] = field(default_factory=dict)
 
     # Optional language/task override supplied via CLI
     task_override: str | None = None

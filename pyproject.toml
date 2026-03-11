@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "unitree_lerobot"
-version = "0.2.0"
+version = "0.3.0"
 description = "unitree data conversion and real machine inference verification"
 readme = "README.md"
 requires-python = ">=3.10,<3.11"
@@ -18,7 +18,6 @@ dependencies = [
     "transformers>=4.45.2",
     "tyro>=0.9.10",
     "matplotlib>=3.9.0",
-    "datasets==3.3.0",
     "meshcat==0.3.2",
     # "unitree_sdk2py @ git+https://github.com/unitreerobotics/unitree_sdk2_python.git@master",
     "logging_mp"

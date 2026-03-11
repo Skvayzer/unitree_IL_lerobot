@@ -1,5 +1,5 @@
 <div align="center">
-  <h1 align="center"> unitree_IL_lerobot </h1>
+  <h1 align="center"> unitree_lerobot </h1>
   <h3 align="center"> Unitree Robotics </h3>
   <p align="center">
     <a href="./README.md"> English </a> | <a href="./docs/README_zh.md">中文</a>
@@ -9,13 +9,20 @@
   </p>
 </div>
 
-| Unitree Robotics repositories | link                                                                            |
-| ----------------------------- | ------------------------------------------------------------------------------- |
-| Unitree Datasets              | [unitree datasets](https://huggingface.co/unitreerobotics)                      |
-| AVP Teleoperate               | [avp_teleoperate](https://github.com/unitreerobotics/avp_teleoperate)           |
-| Unitree Sim IsaacLab          | [unitree_sim_isaaclab](https://github.com/unitreerobotics/unitree_sim_isaaclab) |
+| Unitree Robotics repositories                      | link                                                                               |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Unitree Datasets                                   | [unitree datasets](https://huggingface.co/unitreerobotics)                         |
+| AVP Teleoperate                                    | [avp_teleoperate](https://github.com/unitreerobotics/avp_teleoperate)              |
+| Unitree Sim IsaacLab                               | [unitree_sim_isaaclab](https://github.com/unitreerobotics/unitree_sim_isaaclab)    |
+| Conversion of various versions of lerobot datasets | [any4lerobot](https://github.com/Tavish9/any4lerobot/tree/main/ds_version_convert) |
 
 # 🔖 Release Note
+
+### 🏷️ v0.3
+
+1.Update [`lerobot dataset v3.0`](https://github.com/huggingface/lerobot/blob/main/docs/source/porting_datasets_v3.mdx).
+
+2.More policy support([`pi05`](https://github.com/huggingface/lerobot/tree/main/src/lerobot/policies/pi05), [`groot`](https://github.com/huggingface/lerobot/tree/main/src/lerobot/policies/groot)).
 
 ### 🏷️ v0.2
 
@@ -49,7 +56,7 @@ The purpose of this project is to use the [LeRobot](https://github.com/huggingfa
 
 ```bash
 # Clone the source code
-git clone --recurse-submodules https://github.com/unitreerobotics/unitree_IL_lerobot.git
+git clone --recurse-submodules https://github.com/unitreerobotics/unitree_lerobot.git
 
 # If already downloaded:
 git submodule update --init --recursive
@@ -58,6 +65,8 @@ git submodule update --init --recursive
 conda create -y -n unitree_lerobot python=3.10
 conda activate unitree_lerobot
 conda install pinocchio -c conda-forge
+
+conda install ffmpeg=7.1.1 -c conda-forge
 
 # Install LeRobot
 cd unitree_lerobot/lerobot && pip install -e .
@@ -89,8 +98,8 @@ import tqdm
 episode_index = 1
 dataset = LeRobotDataset(repo_id="unitreerobotics/G1_Dex3_ToastedBread_Dataset")
 
-from_idx = dataset.episode_data_index["from"][episode_index].item()
-to_idx = dataset.episode_data_index["to"][episode_index].item()
+from_idx = dataset.meta.episodes["dataset_from_index"][episode_index]
+to_idx = dataset.meta.episodes["dataset_to_index"][episode_index]
 
 for step_idx in tqdm.tqdm(range(from_idx, to_idx)):
     step = dataset[step_idx]
@@ -101,7 +110,7 @@ for step_idx in tqdm.tqdm(range(from_idx, to_idx)):
 ```bash
 cd unitree_lerobot/lerobot
 
-python src/lerobot/scripts/visualize_dataset.py \
+python src/lerobot/scripts/lerobot_dataset_viz.py \
     --repo-id unitreerobotics/G1_Dex3_ToastedBread_Dataset \
     --episode-index 0
 ```
@@ -138,7 +147,7 @@ python unitree_lerobot/utils/sort_and_rename_folders.py \
 
 #### 2.3.2 🔄 Conversion
 
-Convert `Unitree JSON` Dataset to `LeRobot` Format. You can define your own `robot_type` based on [ROBOT_CONFIGS](https://github.com/unitreerobotics/unitree_IL_lerobot/blob/main/unitree_lerobot/utils/convert_unitree_json_to_lerobot.py#L154).
+Convert `Unitree JSON` Dataset to `LeRobot` Format. You can define your own `robot_type` based on [ROBOT_CONFIGS](https://github.com/unitreerobotics/unitree_lerobot/blob/main/unitree_lerobot/utils/convert_unitree_json_to_lerobot.py#L154).
 
 ```bash
 # --raw-dir     Corresponds to the directory of your JSON dataset
@@ -158,36 +167,36 @@ python unitree_lerobot/utils/convert_unitree_json_to_lerobot.py \
 
 # 3. 🚀 Training
 
-[For training, please refer to the official LeRobot training example and parameters for further guidance.](https://github.com/huggingface/lerobot/blob/main/examples/4_train_policy_with_script.md)
+[For training, please refer to the official LeRobot training example and parameters for further guidance.](https://github.com/huggingface/lerobot/tree/main/docs/source)
 
-- `Train Act Policy`
+- `Train Act Policy` [Please refer to it in detail](https://github.com/huggingface/lerobot/blob/main/docs/source/act.mdx)
 
 ```bash
 cd unitree_lerobot/lerobot
 
-python src/lerobot/scripts/train.py \
+python src/lerobot/scripts/lerobot_train.py \
     --dataset.repo_id=unitreerobotics/G1_Dex3_ToastedBread_Dataset \
     --policy.push_to_hub=false \
     --policy.type=act
 ```
 
-- `Train Diffusion Policy`
+- `Train Diffusion Policy` [Please refer to it in detail](https://github.com/huggingface/lerobot/blob/main/docs/source/policy_diffusion_README.md)
 
 ```bash
 cd unitree_lerobot/lerobot
 
-python src/lerobot/scripts/train.py \
+python src/lerobot/scripts/lerobot_train.py\
     --dataset.repo_id=unitreerobotics/G1_Dex3_ToastedBread_Dataset \
     --policy.push_to_hub=false \
     --policy.type=diffusion
 ```
 
-- `Train Pi0 Policy`
+- `Train Pi0 Policy` [Please refer to it in detail](https://github.com/huggingface/lerobot/blob/main/docs/source/pi0.mdx)
 
 ```bash
 cd unitree_lerobot/lerobot
 
-python src/lerobot/scripts/train.py \
+python src/lerobot/scripts/lerobot_train.py \
     --dataset.repo_id=unitreerobotics/G1_Dex3_ToastedBread_Dataset \
     --policy.push_to_hub=false \
     --policy.type=pi0
@@ -195,6 +204,7 @@ python src/lerobot/scripts/train.py \
 
 <!-- IsaacGr00t START -->
 - `Train Isaac Gr00t Policy (G1 default preset)`
+- `Train Pi05 Policy` [Please refer to it in detail](https://github.com/huggingface/lerobot/blob/main/docs/source/pi05.mdx)
 
 ```bash
 cd unitree_lerobot/lerobot
@@ -216,6 +226,38 @@ python src/lerobot/scripts/train.py \
 
 > Install GR00T before training (`pip install -e ../Isaac-GR00T`) and override `--policy.camera_key` or `--policy.state_groups='{...}'` if your dataset uses different feature names.
 <!-- IsaacGr00t END -->
+
+```bash
+cd unitree_lerobot/lerobot
+
+python src/lerobot/scripts/lerobot_train.py \
+    --dataset.repo_id=unitreerobotics/G1_Dex3_ToastedBread_Dataset \
+    --policy.type=pi05 \
+    --output_dir=./outputs/pi05_training \
+    --job_name=pi05_training \
+    --policy.pretrained_path=lerobot/pi05_base \
+    --policy.compile_model=true \
+    --policy.gradient_checkpointing=true \
+    --policy.dtype=bfloat16 \
+    --policy.device=cuda \
+    --policy.push_to_hub=false
+```
+
+- `Train Gr00t Policy` [Please refer to it in detail](https://github.com/huggingface/lerobot/blob/main/docs/source/groot.mdx)
+
+```bash
+cd unitree_lerobot/lerobot
+
+python src/lerobot/scripts/lerobot_train.py \
+    --dataset.repo_id=unitreerobotics/G1_Dex3_ToastedBread_Dataset \
+    --output_dir=./outputs/groot_training \
+    --policy.push_to_hub=false \
+    --policy.type=groot \
+    --policy.tune_diffusion_model=false \
+    --job_name=groot_training
+```
+
+If you want to use multi-GPU training, please refer to the details [here](https://github.com/huggingface/lerobot/blob/main/docs/source/multi_gpu_training.mdx)
 
 # 4. 🤖 Real-World Testing
 

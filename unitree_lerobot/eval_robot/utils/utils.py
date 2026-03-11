@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from lerobot.configs import parser
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.policies.pretrained import PreTrainedPolicy
+from lerobot.processor import PolicyAction, PolicyProcessorPipeline
 
 
 import logging_mp
@@ -35,6 +36,8 @@ def predict_action(
     observation: dict[str, torch.Tensor],
     policy: PreTrainedPolicy,
     device: torch.device,
+    preprocessor: PolicyProcessorPipeline[dict[str, Any], dict[str, Any]],
+    postprocessor: PolicyProcessorPipeline[PolicyAction, PolicyAction],
     use_amp: bool,
     task: str | None = None,
     use_dataset: bool | None = False,

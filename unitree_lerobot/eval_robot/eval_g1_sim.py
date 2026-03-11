@@ -115,9 +115,24 @@ def eval_policy(
         first_episode_idx = dataset.episodes[0] if dataset.episodes else 0
         episode_metadata = dataset.meta.episodes[int(first_episode_idx)]
         from_idx = int(episode_metadata["dataset_from_index"])
-        step = dataset[from_idx]
-        init_arm_pose = step["observation.state"][:arm_dof].cpu().numpy()
-        task_instruction = cfg.task_override if cfg.task_override is not None else step.get("task", "")
+        try:
+            step = dataset[from_idx]
+            init_arm_pose = step["observation.state"][:arm_dof].cpu().numpy()
+            task_from_dataset = step.get("task", "")
+        except Exception as e:
+            # Videos may not be cached locally — load state directly from parquet
+            logger_mp.warning(f"Could not load dataset frame (videos may be missing): {e}. Loading state from parquet.")
+            import glob, pandas as pd
+            parquet_files = sorted(glob.glob(str(dataset.root / dataset.repo_id / "data" / "**" / "*.parquet"), recursive=True))
+            df = pd.concat([pd.read_parquet(f) for f in parquet_files])
+            row = df.iloc[from_idx]
+            state_np = np.array(row["observation.state"], dtype=np.float32)
+            init_arm_pose = state_np[:arm_dof]
+            task_idx = int(row.get("task_index", 0))
+            tasks_df = pd.read_parquet(str(dataset.root / dataset.repo_id / "meta" / "tasks.parquet"))
+            task_from_dataset = tasks_df.index[task_idx] if task_idx < len(tasks_df) else ""
+            step = {"task": task_from_dataset}
+        task_instruction = cfg.task_override if cfg.task_override is not None else task_from_dataset
         if cfg.task_override is not None:
             logger_mp.info(f"Using CLI-provided task instruction: {cfg.task_override}")
         else:
@@ -182,6 +197,9 @@ def eval_policy(
                         right_ee_state = reorder_dex3_right_legacy_sim(
                             right_ee_state, context="eval_g1_sim/right_ee_state"
                         )
+                    # Dex1: training data had raw stroke [0, 5.4] fed directly to groot_pack_inputs_v3
+                    # using base-model motor-angle stats — model learned stroke-in/stroke-out.
+                    # Do NOT convert stroke to motor-angle here; pass raw stroke as-is.
                 state_tensor = torch.from_numpy(
                     np.concatenate((current_arm_q, left_ee_state, right_ee_state), axis=0)
                 ).float()
@@ -206,6 +224,8 @@ def eval_policy(
                 arm_action = action_np[:arm_dof]
                 tau = arm_ik.solve_tau(arm_action)
                 arm_ctrl.ctrl_dual_arm(arm_action, tau)
+                with open("/tmp/arm_debug.txt", "a") as _f:
+                    _f.write(f"ARM: {np.array2string(np.round(arm_action, 3), max_line_width=300, separator=',')}  STATE: {np.array2string(np.round(current_arm_q, 3), max_line_width=300, separator=',')}\n")
 
                 if cfg.ee:
                     ee_action_start_idx = arm_dof
@@ -222,8 +242,17 @@ def eval_policy(
                         ee_shared_mem["left"][:] = to_list(left_ee_action)
                         ee_shared_mem["right"][:] = to_list(right_ee_action)
                     elif hasattr(ee_shared_mem["left"], "value") and hasattr(ee_shared_mem["right"], "value"):
-                        ee_shared_mem["left"].value = to_scalar(left_ee_action)
-                        ee_shared_mem["right"].value = to_scalar(right_ee_action)
+                        if cfg.ee == "dex1":
+                            # Training data: stroke [0, 5.4]. With correct dataset stats, the
+                            # postprocessor unnormalizes back to stroke space directly.
+                            _STROKE = 5.4
+                            dds_left  = float(np.clip(to_scalar(left_ee_action),  0, _STROKE))
+                            dds_right = float(np.clip(to_scalar(right_ee_action), 0, _STROKE))
+                            ee_shared_mem["left"].value  = dds_left
+                            ee_shared_mem["right"].value = dds_right
+                        else:
+                            ee_shared_mem["left"].value  = to_scalar(left_ee_action)
+                            ee_shared_mem["right"].value = to_scalar(right_ee_action)
                 act_end_time = time.perf_counter()
                 # save data
                 if cfg.save_data:
@@ -344,6 +373,10 @@ def eval_main(cfg: EvalRealConfig):
     dataset_stats = dataset.meta.stats
     if cfg.rename_map:
         dataset_stats = rename_stats(dataset_stats, cfg.rename_map)
+
+    # dataset_stats from the eval dataset are passed as overrides to groot_pack_inputs_v3.
+    # pipeline.py (fixed) re-applies these overrides AFTER loading safetensors stats, so the
+    # dataset's actual min/max are used for normalization — consistent with training.
 
     policy = make_policy(cfg=cfg.policy, ds_meta=dataset.meta, rename_map=cfg.rename_map)
 

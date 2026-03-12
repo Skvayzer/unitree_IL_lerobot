@@ -283,19 +283,42 @@ def eval_main(cfg: EvalRealConfig):
 
     dataset = LeRobotDataset(repo_id=cfg.repo_id)
 
-    policy = make_policy(cfg=cfg.policy, ds_meta=dataset.meta)
-    preprocessor, postprocessor = make_pre_post_processors(cfg.policy, dataset_stats=dataset.meta.stats)
-    policy.eval()
+    dataset_stats = dataset.meta.stats
+    if cfg.rename_map:
+        dataset_stats = rename_stats(dataset_stats, cfg.rename_map)
+
+    policy = make_policy(cfg=cfg.policy, ds_meta=dataset.meta, rename_map=cfg.rename_map)
+
+    processor_kwargs: dict = {"dataset_stats": dataset_stats}
+    postprocessor_kwargs: dict = {}
+
+    if cfg.policy.pretrained_path:
+        preprocessor_overrides = {
+            "device_processor": {"device": device.type},
+            "normalizer_processor": {
+                "stats": dataset_stats,
+                "features": {**policy.config.input_features, **policy.config.output_features},
+                "norm_map": policy.config.normalization_mapping,
+            },
+        }
+        if cfg.rename_map:
+            preprocessor_overrides["rename_observations_processor"] = {"rename_map": cfg.rename_map}
+        processor_kwargs["preprocessor_overrides"] = preprocessor_overrides
+        postprocessor_kwargs["postprocessor_overrides"] = {
+            "unnormalizer_processor": {
+                "stats": dataset_stats,
+                "features": policy.config.output_features,
+                "norm_map": policy.config.normalization_mapping,
+            }
+        }
 
     preprocessor, postprocessor = make_pre_post_processors(
-        policy_cfg=cfg.policy,
+        cfg.policy,
         pretrained_path=cfg.policy.pretrained_path,
-        dataset_stats=rename_stats(dataset.meta.stats, cfg.rename_map),
-        preprocessor_overrides={
-            "device_processor": {"device": cfg.policy.device},
-            "rename_observations_processor": {"rename_map": cfg.rename_map},
-        },
+        **processor_kwargs,
+        **postprocessor_kwargs,
     )
+    policy.eval()
 
     with torch.no_grad(), torch.autocast(device_type=device.type) if cfg.policy.use_amp else nullcontext():
         eval_policy(

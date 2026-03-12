@@ -225,8 +225,6 @@ def eval_policy(
                     policy.config.use_amp,
                     task_instruction,
                     use_dataset=cfg.use_dataset,
-                    preprocessor=preprocessor,
-                    postprocessor=postprocessor,
                 )
                 action_np = action.cpu().numpy()
                 policy_end_time = time.perf_counter()
@@ -254,11 +252,8 @@ def eval_policy(
                         ee_shared_mem["right"][:] = to_list(right_ee_action)
                     elif hasattr(ee_shared_mem["left"], "value") and hasattr(ee_shared_mem["right"], "value"):
                         if cfg.ee == "dex1":
-                            # Training data: stroke [0, 5.4]. With correct dataset stats, the
-                            # postprocessor unnormalizes back to stroke space directly.
-                            _STROKE = 5.4
-                            dds_left  = float(np.clip(to_scalar(left_ee_action),  0, _STROKE))
-                            dds_right = float(np.clip(to_scalar(right_ee_action), 0, _STROKE))
+                            dds_left  = float(to_scalar(left_ee_action))
+                            dds_right = float(to_scalar(right_ee_action))
                             ee_shared_mem["left"].value  = dds_left
                             ee_shared_mem["right"].value = dds_right
                         else:
@@ -353,7 +348,9 @@ def eval_policy(
                     )
 
     except Exception as e:
+        import traceback
         logger_mp.info(f"An error occurred: {e}")
+        traceback.print_exc()
     finally:
         if image_info:
             cleanup_resources(image_info)
@@ -421,16 +418,6 @@ def eval_main(cfg: EvalRealConfig):
         **postprocessor_kwargs,
     )
     policy.eval()
-
-    preprocessor, postprocessor = make_pre_post_processors(
-        policy_cfg=cfg.policy,
-        pretrained_path=cfg.policy.pretrained_path,
-        dataset_stats=rename_stats(dataset.meta.stats, cfg.rename_map),
-        preprocessor_overrides={
-            "device_processor": {"device": cfg.policy.device},
-            "rename_observations_processor": {"rename_map": cfg.rename_map},
-        },
-    )
 
     with torch.no_grad(), torch.autocast(device_type=device.type) if cfg.policy.use_amp else nullcontext():
         eval_policy(

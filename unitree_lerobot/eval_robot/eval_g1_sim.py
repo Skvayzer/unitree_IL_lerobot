@@ -213,6 +213,11 @@ def eval_policy(
                     np.concatenate((current_arm_q, left_ee_state, right_ee_state), axis=0)
                 ).float()
                 observation["observation.state"] = state_tensor
+                # Drop image keys that the model wasn't trained on
+                trained_img_keys = {k for k in dataset.meta.features if k.startswith("observation.images.")}
+                for k in list(observation):
+                    if k.startswith("observation.images.") and k not in trained_img_keys:
+                        observation.pop(k)
                 obs_end_time = time.perf_counter()
                 # 2. Get Action from Policy
                 policy_start_time = time.perf_counter()

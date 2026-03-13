@@ -36,13 +36,11 @@ def predict_action(
     observation: dict[str, torch.Tensor],
     policy: PreTrainedPolicy,
     device: torch.device,
-    preprocessor: PolicyProcessorPipeline[dict[str, Any], dict[str, Any]],
-    postprocessor: PolicyProcessorPipeline[PolicyAction, PolicyAction],
-    use_amp: bool,
-    task: str | None = None,
-    use_dataset: bool | None = False,
     preprocessor: Any | None = None,
     postprocessor: Any | None = None,
+    use_amp: bool = False,
+    task: str | None = None,
+    use_dataset: bool | None = False,
 ) -> torch.Tensor:
     """Generate an action from the current observation using the provided policy."""
     observation_copy = copy({k: v for k, v in observation.items() if v is not None})

@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=act_craftnet
 #SBATCH --partition=faculty
+#SBATCH --qos=gtqos
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=128G
-#SBATCH --time=24:00:00
 #SBATCH --output=/vast/users/chenyuan.chen/constantine/act_craftnet/logs/slurm_%j.out
 #SBATCH --error=/vast/users/chenyuan.chen/constantine/act_craftnet/logs/slurm_%j.err
 
